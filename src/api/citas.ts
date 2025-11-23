@@ -24,3 +24,9 @@ export const createCita = async (cita: CreateCitaDto): Promise<Cita> => {
   const response = await api.post<Cita>('Citas', cita);
   return response.data;
 };
+
+// PUT - Actualizar una cita completa
+export const updateCita = async (id: number, cita: Partial<CreateCitaDto>): Promise<Cita> => {
+  const response = await api.put<Cita>(`Citas/${id}`, cita);
+  return response.data;
+};

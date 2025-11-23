@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getCitas, createCita, getCitasByEmpleada } from '../api/citas';
+import { getCitas, createCita, getCitasByEmpleada, updateCita } from '../api/citas';
 import { getClientes } from '../api/clientes';
 import { getEmpleadas } from '../api/empleadas';
 import { getServicios } from '../api/servicios';
@@ -12,7 +12,7 @@ import {
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { 
-  Search, Plus, Calendar as CalendarIcon, Clock, User, Download, CheckCircle, MoreVertical
+  Search, Plus, Calendar as CalendarIcon, Clock, User, Download, CheckCircle, MoreVertical, XCircle
 } from 'lucide-react';
 import dayjs from 'dayjs';
 
@@ -58,6 +58,17 @@ export const CitasPage = () => {
     },
   });
 
+  const updateEstadoMutation = useMutation({
+    mutationFn: ({ id, cita }: { id: number; cita: any }) => updateCita(id, cita),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['citas'] });
+      message.success('Estado de cita actualizado');
+    },
+    onError: () => {
+      message.error('Error al actualizar el estado');
+    },
+  });
+
   const handleOpenModal = () => {
     form.resetFields();
     setIsModalOpen(true);
@@ -95,7 +106,7 @@ export const CitasPage = () => {
       content: `Se creará una venta por el servicio "${servicio.nombre}" con un monto de Bs. ${servicio.precio.toFixed(2)}`,
       okText: 'Completar',
       cancelText: 'Cancelar',
-      onOk: () => {
+      onOk: async () => {
         const ventaData = {
           clienteId: cita.clienteId,
           fecha: dayjs().format('YYYY-MM-DD'),
@@ -107,7 +118,42 @@ export const CitasPage = () => {
             precioUnitario: servicio.precio,
           }],
         };
-        completarCitaMutation.mutate(ventaData);
+        await completarCitaMutation.mutateAsync(ventaData);
+        // Actualizar estado a completada
+        updateEstadoMutation.mutate({ 
+          id: cita.id, 
+          cita: {
+            clienteId: cita.clienteId,
+            empleadaId: cita.empleadaId,
+            servicioId: cita.servicioId,
+            fecha: cita.fecha,
+            hora: cita.hora,
+            estado: 'Completada'
+          }
+        });
+      },
+    });
+  };
+
+  const handleCancelarCita = (cita: Cita) => {
+    Modal.confirm({
+      title: '¿Cancelar esta cita?',
+      content: 'Esta acción marcará la cita como cancelada.',
+      okText: 'Sí, cancelar',
+      cancelText: 'No',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        updateEstadoMutation.mutate({ 
+          id: cita.id, 
+          cita: {
+            clienteId: cita.clienteId,
+            empleadaId: cita.empleadaId,
+            servicioId: cita.servicioId,
+            fecha: cita.fecha,
+            hora: cita.hora,
+            estado: 'Cancelada'
+          }
+        });
       },
     });
   };
@@ -198,32 +244,54 @@ export const CitasPage = () => {
       title: 'Estado',
       key: 'estado',
       render: (_, record) => {
-        const fechaCita = dayjs(`${record.fecha} ${record.hora}`);
-        const ahora = dayjs();
+        const estado = record.estado || 'Programada';
         
-        if (fechaCita.isBefore(ahora)) {
-          return <Tag color="default">Completada</Tag>;
-        } else if (fechaCita.diff(ahora, 'hours') < 2) {
-          return <Tag color="orange">Próxima</Tag>;
+        if (estado === 'Completada') {
+          return <Tag color="green">Completada</Tag>;
+        } else if (estado === 'Cancelada') {
+          return <Tag color="red">Cancelada</Tag>;
+        } else {
+          const fechaCita = dayjs(`${record.fecha} ${record.hora}`);
+          const ahora = dayjs();
+          
+          if (fechaCita.diff(ahora, 'hours') < 2 && fechaCita.isAfter(ahora)) {
+            return <Tag color="orange">Próxima</Tag>;
+          }
+          return <Tag color="blue">Programada</Tag>;
         }
-        return <Tag color="green">Programada</Tag>;
       },
     },
     {
       title: 'Acciones',
       key: 'acciones',
       render: (_, record) => {
-        const items: MenuProps['items'] = [
-          {
+        const estado = record.estado || 'Programada';
+        const items: MenuProps['items'] = [];
+        
+        // Solo permitir completar si no está completada o cancelada
+        if (estado !== 'Completada' && estado !== 'Cancelada') {
+          items.push({
             key: 'completar',
             label: 'Completar Cita',
             icon: <CheckCircle size={16} />,
             onClick: () => handleCompletarCita(record),
-          },
-        ];
+          });
+        }
+        
+        // Solo permitir cancelar si no está cancelada o completada
+        if (estado !== 'Cancelada' && estado !== 'Completada') {
+          items.push({
+            key: 'cancelar',
+            label: 'Cancelar Cita',
+            icon: <XCircle size={16} />,
+            danger: true,
+            onClick: () => handleCancelarCita(record),
+          });
+        }
+        
         return (
-          <Dropdown menu={{ items }} trigger={['click']}>
-            <Button icon={<MoreVertical size={16} />} />
+          <Dropdown menu={{ items }} trigger={['click']} disabled={items.length === 0}>
+            <Button icon={<MoreVertical size={16} />} disabled={items.length === 0} />
           </Dropdown>
         );
       },

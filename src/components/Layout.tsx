@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, Outlet, useLocation } from '@tanstack/react-router';
+import { Link, Outlet } from '@tanstack/react-router';
 import { 
   Users, 
   LogOut, 
@@ -7,6 +7,7 @@ import {
   Bell,
   FolderOpen,
   Calendar,
+  CalendarDays,
   UserCheck,
   Package,
   Scissors,
@@ -73,6 +74,7 @@ export const Layout = () => {
           </div>
           <SidebarItem to="/clientes" icon={Users} label="Clientes" />
           <SidebarItem to="/citas" icon={Calendar} label="Citas" />
+          <SidebarItem to="/calendario" icon={CalendarDays} label="Calendario" />
           <SidebarItem to="/ventas" icon={ShoppingCart} label="Ventas" />
           
           <div className="px-6 mt-8 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
