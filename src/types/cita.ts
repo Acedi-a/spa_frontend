@@ -28,4 +28,7 @@ export interface CreateCitaDto {
   servicioId: number;
   fecha: string;
   hora: string;
+  estado?: string;
+  horaInicio?: string;
+  horaFin?: string;
 }

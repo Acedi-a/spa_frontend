@@ -4,13 +4,15 @@ import { getCitas, createCita, getCitasByEmpleada } from '../api/citas';
 import { getClientes } from '../api/clientes';
 import { getEmpleadas } from '../api/empleadas';
 import { getServicios } from '../api/servicios';
+import { createVenta } from '../api/ventas';
 import type { Cita } from '../types/cita';
 import { 
-  Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, Select, DatePicker, TimePicker, Tag, message
+  Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, Select, DatePicker, TimePicker, Tag, message, Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { 
-  Search, Plus, Calendar as CalendarIcon, Clock, User, Filter, Download
+  Search, Plus, Calendar as CalendarIcon, Clock, User, Download, CheckCircle, MoreVertical
 } from 'lucide-react';
 import dayjs from 'dayjs';
 
@@ -44,6 +46,18 @@ export const CitasPage = () => {
     },
   });
 
+  const completarCitaMutation = useMutation({
+    mutationFn: createVenta,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['citas'] });
+      queryClient.invalidateQueries({ queryKey: ['ventas'] });
+      message.success('Cita completada y venta registrada exitosamente');
+    },
+    onError: () => {
+      message.error('Error al completar la cita');
+    },
+  });
+
   const handleOpenModal = () => {
     form.resetFields();
     setIsModalOpen(true);
@@ -55,22 +69,78 @@ export const CitasPage = () => {
   };
 
   const handleSubmit = async (values: any) => {
+    const horaFormateada = values.hora.format('HH:mm:ss');
     const citaData = {
       clienteId: values.clienteId,
       empleadaId: values.empleadaId,
       servicioId: values.servicioId,
       fecha: values.fecha.format('YYYY-MM-DD'),
-      hora: values.hora.format('HH:mm:ss'),
+      hora: horaFormateada,
+      horaInicio: horaFormateada,
+      horaFin: horaFormateada,
     };
+    console.log('Enviando cita:', citaData); // Para debug
     createMutation.mutate(citaData);
   };
 
+  const handleCompletarCita = (cita: Cita) => {
+    const servicio = getServicioInfo(cita.servicioId);
+    if (!servicio) {
+      message.error('No se pudo obtener información del servicio');
+      return;
+    }
+
+    Modal.confirm({
+      title: '¿Completar cita y registrar venta?',
+      content: `Se creará una venta por el servicio "${servicio.nombre}" con un monto de Bs. ${servicio.precio.toFixed(2)}`,
+      okText: 'Completar',
+      cancelText: 'Cancelar',
+      onOk: () => {
+        const ventaData = {
+          clienteId: cita.clienteId,
+          fecha: dayjs().format('YYYY-MM-DD'),
+          metodoPago: 'Efectivo',
+          total: servicio.precio,
+          detalleVentas: [{
+            servicioId: cita.servicioId,
+            cantidad: 1,
+            precioUnitario: servicio.precio,
+          }],
+        };
+        completarCitaMutation.mutate(ventaData);
+      },
+    });
+  };
+
   const citasArray = Array.isArray(citas) ? citas : [];
-  const filteredCitas = citasArray.filter(cita => 
-    cita.cliente?.nombre.toLowerCase().includes(searchText.toLowerCase()) ||
-    cita.empleada?.nombre.toLowerCase().includes(searchText.toLowerCase()) ||
-    cita.servicio?.nombre.toLowerCase().includes(searchText.toLowerCase())
-  );
+  
+  // Función helper para buscar datos relacionados
+  const getClienteNombre = (clienteId: string) => {
+    const cliente = clientes?.find(c => c.id === clienteId);
+    return cliente?.nombre || 'N/A';
+  };
+  
+  const getEmpleadaNombre = (empleadaId: number) => {
+    const empleada = empleadas?.find(e => e.id === empleadaId);
+    return empleada?.nombre || 'N/A';
+  };
+  
+  const getServicioInfo = (servicioId: number) => {
+    const servicio = servicios?.find(s => s.id === servicioId);
+    return servicio || null;
+  };
+  
+  const filteredCitas = citasArray.filter(cita => {
+    const clienteNombre = getClienteNombre(cita.clienteId);
+    const empleadaNombre = getEmpleadaNombre(cita.empleadaId);
+    const servicioInfo = getServicioInfo(cita.servicioId);
+    const searchLower = searchText.toLowerCase();
+    
+    return clienteNombre.toLowerCase().includes(searchLower) ||
+           empleadaNombre.toLowerCase().includes(searchLower) ||
+           servicioInfo?.nombre.toLowerCase().includes(searchLower) ||
+           false;
+  });
 
   const columns: ColumnsType<Cita> = [
     {
@@ -102,24 +172,27 @@ export const CitasPage = () => {
       render: (_, record) => (
         <div className="flex items-center gap-2">
           <User size={16} className="text-slate-400" />
-          <span>{record.cliente?.nombre || 'N/A'}</span>
+          <span>{getClienteNombre(record.clienteId)}</span>
         </div>
       ),
     },
     {
       title: 'Empleada',
       key: 'empleada',
-      render: (_, record) => record.empleada?.nombre || 'N/A',
+      render: (_, record) => getEmpleadaNombre(record.empleadaId),
     },
     {
       title: 'Servicio',
       key: 'servicio',
-      render: (_, record) => record.servicio?.nombre || 'N/A',
+      render: (_, record) => getServicioInfo(record.servicioId)?.nombre || 'N/A',
     },
     {
       title: 'Duración',
       key: 'duracion',
-      render: (_, record) => record.servicio ? `${record.servicio.duracion} min` : 'N/A',
+      render: (_, record) => {
+        const servicio = getServicioInfo(record.servicioId);
+        return servicio ? `${servicio.duracion} min` : 'N/A';
+      },
     },
     {
       title: 'Estado',
@@ -134,6 +207,25 @@ export const CitasPage = () => {
           return <Tag color="orange">Próxima</Tag>;
         }
         return <Tag color="green">Programada</Tag>;
+      },
+    },
+    {
+      title: 'Acciones',
+      key: 'acciones',
+      render: (_, record) => {
+        const items: MenuProps['items'] = [
+          {
+            key: 'completar',
+            label: 'Completar Cita',
+            icon: <CheckCircle size={16} />,
+            onClick: () => handleCompletarCita(record),
+          },
+        ];
+        return (
+          <Dropdown menu={{ items }} trigger={['click']}>
+            <Button icon={<MoreVertical size={16} />} />
+          </Dropdown>
+        );
       },
     },
   ];
