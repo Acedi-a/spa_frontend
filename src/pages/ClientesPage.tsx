@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getClientes, createCliente, updateCliente, deleteCliente } from '../api/clientes';
-import { Cliente, CreateClienteDto } from '../types/cliente';
+import type { Cliente, CreateClienteDto } from '../types/cliente';
 import { 
   Table, 
   Button, 
@@ -131,7 +131,8 @@ export const ClientesPage = () => {
   };
 
   // Filtrado simple en el cliente (idealmente sería en backend)
-  const filteredClientes = clientes?.filter(cliente => 
+  const clientesArray = Array.isArray(clientes) ? clientes : [];
+  const filteredClientes = clientesArray.filter(cliente => 
     cliente.nombre.toLowerCase().includes(searchText.toLowerCase()) ||
     cliente.email?.toLowerCase().includes(searchText.toLowerCase()) ||
     cliente.telefono?.includes(searchText)

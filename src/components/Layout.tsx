@@ -1,12 +1,17 @@
 import React from 'react';
 import { Link, Outlet, useLocation } from '@tanstack/react-router';
 import { 
-  LayoutDashboard, 
   Users, 
-  Settings, 
   LogOut, 
   Menu,
-  Bell
+  Bell,
+  FolderOpen,
+  Calendar,
+  UserCheck,
+  Package,
+  Scissors,
+  ShoppingCart,
+  BarChart3
 } from 'lucide-react';
 
 const SidebarItem = ({ 
@@ -64,15 +69,28 @@ export const Layout = () => {
         {/* Navigation */}
         <nav className="flex-1 py-8 space-y-1 overflow-y-auto">
           <div className="px-6 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Principal
+            Gestión
           </div>
-          <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" />
           <SidebarItem to="/clientes" icon={Users} label="Clientes" />
+          <SidebarItem to="/citas" icon={Calendar} label="Citas" />
+          <SidebarItem to="/ventas" icon={ShoppingCart} label="Ventas" />
           
           <div className="px-6 mt-8 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Sistema
+            Catálogo
           </div>
-          <SidebarItem to="/configuracion" icon={Settings} label="Configuración" />
+          <SidebarItem to="/productos" icon={Package} label="Productos" />
+          <SidebarItem to="/servicios" icon={Scissors} label="Servicios" />
+          <SidebarItem to="/categorias" icon={FolderOpen} label="Categorías" />
+          
+          <div className="px-6 mt-8 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Personal
+          </div>
+          <SidebarItem to="/empleadas" icon={UserCheck} label="Empleadas" />
+          
+          <div className="px-6 mt-8 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Análisis
+          </div>
+          <SidebarItem to="/reportes" icon={BarChart3} label="Reportes" />
         </nav>
 
         {/* User Profile / Footer */}
