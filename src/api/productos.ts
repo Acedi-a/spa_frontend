@@ -3,8 +3,8 @@ import type { Producto, CreateProductoDto, UpdateProductoDto } from '../types/pr
 
 // GET - Obtener todos los productos
 export const getProductos = async (): Promise<Producto[]> => {
-  const response = await api.get<Producto[]>('Productos');
-  return response.data;
+   const response = await api.get<{ mensaje: string; data: Producto[] }>('Productos');
+  return response.data.data;
 };
 
 // GET - Obtener un producto por ID

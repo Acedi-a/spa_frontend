@@ -3,8 +3,8 @@ import type { Cita, CreateCitaDto } from '../types/cita';
 
 // GET - Obtener todas las citas
 export const getCitas = async (): Promise<Cita[]> => {
-  const response = await api.get<Cita[]>('Citas');
-  return response.data;
+    const response = await api.get<{ mensaje: string; data: Cita[] }>('Citas');
+  return response.data.data;
 };
 
 // GET - Obtener una cita por ID
