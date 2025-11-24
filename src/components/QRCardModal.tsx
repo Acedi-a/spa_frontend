@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import html2canvas from 'html2canvas';
 import type { Cliente } from '../types/cliente';
 import { getBackgroundPatternStyle } from '../utils/backgroundPatterns';
+import { sendQRCardByEmail } from '../api/email';
 
 interface QRCardModalProps {
   open: boolean;
@@ -119,21 +120,48 @@ export const QRCardModal: React.FC<QRCardModalProps> = ({ open, onClose, cliente
   };
 
   const handleSendEmail = async () => {
-    const blob = await exportAsImage();
-    if (blob) {
-      // Convertir blob a base64 para email
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        // const base64data = reader.result as string;
-        const subject = encodeURIComponent('Tu Tarjeta de Cliente - SPA Premium');
-        const body = encodeURIComponent(
-          `Hola ${cliente.nombre},\n\nAdjunto encontrarás tu tarjeta de cliente con código QR.\n\nSaludos,\nEquipo SPA Premium`
-        );
-        // Abrir cliente de email (nota: el attachment no funcionará así, pero abre el email)
-        window.location.href = `mailto:${cliente.email}?subject=${subject}&body=${body}`;
-        message.info('Se ha abierto tu cliente de email');
-      };
-      reader.readAsDataURL(blob);
+    if (!cliente.email) {
+      message.error('El cliente no tiene correo electrónico registrado');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const blob = await exportAsImage();
+      if (blob) {
+        // Convertir blob a base64
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          
+          try {
+            // Enviar email con la tarjeta adjunta
+            const response = await sendQRCardByEmail(
+              cliente.email!,
+              cliente.nombre,
+              base64data
+            );
+            
+            if (response && (response.mensaje || response.success)) {
+              message.success('¡Tarjeta enviada correctamente al email del cliente!');
+            } else {
+              message.error('Error al enviar el email. Intente nuevamente.');
+            }
+          } catch (error: any) {
+            const errorMsg = error.response?.data?.mensaje || 'Error al enviar el email';
+            message.error(errorMsg);
+          } finally {
+            setLoading(false);
+          }
+        };
+        reader.readAsDataURL(blob);
+      } else {
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      message.error('Error al procesar la tarjeta');
+      setLoading(false);
     }
   };
 
