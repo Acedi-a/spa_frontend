@@ -9,6 +9,8 @@ import type { Cita } from '../types/cita';
 import { 
   Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, Select, DatePicker, TimePicker, Tag, message, Dropdown
 } from 'antd';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { 
@@ -175,6 +177,152 @@ export const CitasPage = () => {
     const servicio = servicios?.find(s => s.id === servicioId);
     return servicio || null;
   };
+
+  const handleExportPDF = () => {
+    if (!citas || citasArray.length === 0) {
+      message.warning('No hay citas para exportar');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let yPos = 20;
+
+      // Encabezado
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('LISTADO DE CITAS', pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generado el ${dayjs().format('DD/MM/YYYY HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 5;
+      if (selectedEmpleada) {
+        const empleada = empleadas?.find(e => e.id === selectedEmpleada);
+        doc.text(`Empleada: ${empleada?.nombre || 'N/A'}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 5;
+      }
+      doc.text(`Total de citas: ${citasArray.length}`, pageWidth / 2, yPos, { align: 'center' });
+
+      yPos += 15;
+
+      // Tabla de citas
+      const tableData = citasArray.map((cita, index) => {
+        const servicio = getServicioInfo(cita.servicioId);
+        return [
+          (index + 1).toString(),
+          dayjs(cita.fecha).format('DD/MM/YYYY'),
+          cita.hora.slice(0, 5),
+          getClienteNombre(cita.clienteId),
+          getEmpleadaNombre(cita.empleadaId),
+          servicio?.nombre || 'N/A',
+          servicio ? `${servicio.duracion} min` : 'N/A',
+          cita.estado || 'Programada',
+        ];
+      });
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['#', 'Fecha', 'Hora', 'Cliente', 'Empleada', 'Servicio', 'Duración', 'Estado']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [24, 144, 255],
+          fontSize: 8,
+          fontStyle: 'bold'
+        },
+        styles: {
+          fontSize: 7,
+          cellPadding: 2
+        },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 15 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 30 },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 20 },
+          7: { cellWidth: 25 }
+        },
+        margin: { left: 5, right: 5 },
+      });
+
+      // Estadísticas
+      const finalY = (doc as any).lastAutoTable.finalY;
+      if (finalY < doc.internal.pageSize.getHeight() - 70) {
+        yPos = finalY + 15;
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Estadísticas', 14, yPos);
+        yPos += 7;
+
+        const citasProgramadas = citasArray.filter(c => (c.estado || 'Programada') === 'Programada').length;
+        const citasCompletadas = citasArray.filter(c => c.estado === 'Completada').length;
+        const citasCanceladas = citasArray.filter(c => c.estado === 'Cancelada').length;
+
+        // Agrupar por servicio
+        const serviciosCount: Record<string, number> = {};
+        citasArray.forEach(cita => {
+          const servicio = getServicioInfo(cita.servicioId);
+          const nombre = servicio?.nombre || 'N/A';
+          serviciosCount[nombre] = (serviciosCount[nombre] || 0) + 1;
+        });
+
+        const estadisticas = [
+          ['Citas Programadas', citasProgramadas.toString()],
+          ['Citas Completadas', citasCompletadas.toString()],
+          ['Citas Canceladas', citasCanceladas.toString()],
+          ['', ''], // Separador
+          ...Object.entries(serviciosCount)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([servicio, count]) => [`Servicio: ${servicio}`, count.toString()])
+        ];
+
+        autoTable(doc, {
+          startY: yPos,
+          body: estadisticas,
+          theme: 'striped',
+          styles: { fontSize: 9 },
+          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { fontStyle: 'bold', cellWidth: 100 },
+            1: { halign: 'right', cellWidth: 'auto' }
+          }
+        });
+      }
+
+      // Pie de página
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(128);
+        doc.text(
+          `Página ${i} de ${totalPages}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+      }
+
+      // Guardar PDF
+      const fileName = selectedEmpleada 
+        ? `Citas_${empleadas?.find(e => e.id === selectedEmpleada)?.nombre}_${dayjs().format('DDMMYYYY_HHmm')}.pdf`
+        : `Citas_${dayjs().format('DDMMYYYY_HHmm')}.pdf`;
+      doc.save(fileName);
+      
+      message.success('Listado de citas exportado exitosamente');
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      message.error('Error al generar el PDF');
+    }
+  };
   
   const filteredCitas = citasArray.filter(cita => {
     const clienteNombre = getClienteNombre(cita.clienteId);
@@ -312,7 +460,13 @@ export const CitasPage = () => {
           <Text type="secondary">Gestión de citas y agenda de servicios.</Text>
         </div>
         <Space>
-          <Button icon={<Download size={18} />}>Exportar</Button>
+          <Button 
+            icon={<Download size={18} />}
+            onClick={handleExportPDF}
+            loading={isLoading}
+          >
+            Exportar PDF
+          </Button>
           <Button type="primary" icon={<Plus size={18} />} onClick={handleOpenModal}>
             Nueva Cita
           </Button>

@@ -18,6 +18,8 @@ import {
   Dropdown,
   message
 } from 'antd';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { 
@@ -132,6 +134,120 @@ export const ClientesPage = () => {
       cancelText: 'Cancelar',
       onOk: () => deleteMutation.mutate(id),
     });
+  };
+
+  const handleExportPDF = () => {
+    if (!clientes || clientes.length === 0) {
+      message.warning('No hay clientes para exportar');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let yPos = 20;
+
+      // Encabezado
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('LISTADO DE CLIENTES', pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generado el ${dayjs().format('DD/MM/YYYY HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 5;
+      doc.text(`Total de clientes: ${clientesArray.length}`, pageWidth / 2, yPos, { align: 'center' });
+
+      yPos += 15;
+
+      // Tabla de clientes
+      const tableData = clientesArray.map((cliente, index) => [
+        (index + 1).toString(),
+        cliente.nombre,
+        cliente.email || 'N/A',
+        cliente.telefono || 'N/A',
+        cliente.fechaNacimiento ? dayjs(cliente.fechaNacimiento).format('DD/MM/YYYY') : 'N/A',
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['#', 'Nombre', 'Email', 'Teléfono', 'Fecha Nacimiento']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [24, 144, 255],
+          fontSize: 10,
+          fontStyle: 'bold'
+        },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3
+        },
+        columnStyles: {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 50 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 35 }
+        },
+        margin: { left: 14, right: 14 },
+      });
+
+      // Estadísticas adicionales
+      const finalY = (doc as any).lastAutoTable.finalY;
+      if (finalY < doc.internal.pageSize.getHeight() - 60) {
+        yPos = finalY + 15;
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Estadísticas', 14, yPos);
+        yPos += 7;
+
+        const clientesConEmail = clientesArray.filter(c => c.email).length;
+        const clientesConTelefono = clientesArray.filter(c => c.telefono).length;
+        const clientesConFecha = clientesArray.filter(c => c.fechaNacimiento).length;
+
+        const estadisticas = [
+          ['Clientes con email', clientesConEmail.toString(), `${((clientesConEmail / clientesArray.length) * 100).toFixed(1)}%`],
+          ['Clientes con teléfono', clientesConTelefono.toString(), `${((clientesConTelefono / clientesArray.length) * 100).toFixed(1)}%`],
+          ['Clientes con fecha de nacimiento', clientesConFecha.toString(), `${((clientesConFecha / clientesArray.length) * 100).toFixed(1)}%`],
+        ];
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Métrica', 'Cantidad', 'Porcentaje']],
+          body: estadisticas,
+          theme: 'striped',
+          headStyles: { fillColor: [52, 168, 83] },
+          margin: { left: 14, right: 14 },
+        });
+      }
+
+      // Pie de página en todas las páginas
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(128);
+        doc.text(
+          `Página ${i} de ${totalPages}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+      }
+
+      // Guardar PDF
+      const fileName = `Clientes_${dayjs().format('DDMMYYYY_HHmm')}.pdf`;
+      doc.save(fileName);
+      
+      message.success('Listado de clientes exportado exitosamente');
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      message.error('Error al generar el PDF');
+    }
   };
 
   // Filtrado simple en el cliente (idealmente sería en backend)
@@ -266,8 +382,12 @@ export const ClientesPage = () => {
           <Text type="secondary">Gestiona tu base de datos de clientes y contactos.</Text>
         </div>
         <Space>
-          <Button icon={<Download size={18} />}>
-            Exportar
+          <Button 
+            icon={<Download size={18} />}
+            onClick={handleExportPDF}
+            loading={isLoading}
+          >
+            Exportar PDF
           </Button>
           <Button type="primary" icon={<Plus size={18} />} onClick={() => handleOpenModal()}>
             Nuevo Cliente

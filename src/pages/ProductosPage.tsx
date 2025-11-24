@@ -6,6 +6,8 @@ import type { Producto } from '../types/producto';
 import { 
   Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, Select, InputNumber, DatePicker, Dropdown, Tag, message
 } from 'antd';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Search, Plus, MoreVertical, Edit, Trash2, Package, AlertTriangle, Download } from 'lucide-react';
@@ -94,6 +96,198 @@ export const ProductosPage = () => {
     });
   };
 
+  const handleExportPDF = () => {
+    if (!productos || productosArray.length === 0) {
+      message.warning('No hay productos para exportar');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let yPos = 20;
+
+      // Encabezado
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INVENTARIO DE PRODUCTOS', pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generado el ${dayjs().format('DD/MM/YYYY HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 5;
+      doc.text(`Total de productos: ${productosArray.length}`, pageWidth / 2, yPos, { align: 'center' });
+
+      yPos += 15;
+
+      // Tabla de productos
+      const tableData = productosArray.map((producto, index) => [
+        (index + 1).toString(),
+        producto.nombre,
+        getCategoriaNombre(producto.categoriaId),
+        `Bs. ${producto.precio.toFixed(2)}`,
+        producto.stock.toString(),
+        producto.fechaVencimiento ? dayjs(producto.fechaVencimiento).format('DD/MM/YYYY') : 'N/A',
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['#', 'Producto', 'Categoría', 'Precio', 'Stock', 'Vencimiento']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [24, 144, 255],
+          fontSize: 9,
+          fontStyle: 'bold'
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.5
+        },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 60 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 30 }
+        },
+        margin: { left: 10, right: 10 },
+      });
+
+      // Estadísticas (calcular antes del bloque condicional)
+      const stockTotal = productosArray.reduce((sum, p) => sum + p.stock, 0);
+      const valorInventario = productosArray.reduce((sum, p) => sum + (p.precio * p.stock), 0);
+      const stockBajo = productosArray.filter(p => p.stock < 10).length;
+      const productosVencer = productosArray.filter(p => {
+        if (!p.fechaVencimiento) return false;
+        const dias = dayjs(p.fechaVencimiento).diff(dayjs(), 'day');
+        return dias <= 30 && dias >= 0;
+      }).length;
+
+      const finalY = (doc as any).lastAutoTable.finalY;
+      if (finalY < doc.internal.pageSize.getHeight() - 80) {
+        yPos = finalY + 15;
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Estadísticas de Inventario', 14, yPos);
+        yPos += 7;
+
+        // Productos por categoría
+        const porCategoria: Record<string, { cantidad: number; valor: number }> = {};
+        productosArray.forEach(p => {
+          const cat = getCategoriaNombre(p.categoriaId);
+          if (!porCategoria[cat]) {
+            porCategoria[cat] = { cantidad: 0, valor: 0 };
+          }
+          porCategoria[cat].cantidad += 1;
+          porCategoria[cat].valor += p.precio * p.stock;
+        });
+
+        const estadisticas = [
+          ['Stock Total', stockTotal.toString()],
+          ['Valor Total del Inventario', `Bs. ${valorInventario.toFixed(2)}`],
+          ['Productos con Stock Bajo (<10)', stockBajo.toString()],
+          ['Productos por Vencer (30 días)', productosVencer.toString()],
+          ['Precio Promedio', `Bs. ${(productosArray.reduce((sum, p) => sum + p.precio, 0) / productosArray.length).toFixed(2)}`],
+        ];
+
+        autoTable(doc, {
+          startY: yPos,
+          body: estadisticas,
+          theme: 'striped',
+          styles: { fontSize: 9 },
+          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { fontStyle: 'bold', cellWidth: 100 },
+            1: { halign: 'right', cellWidth: 'auto' }
+          }
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+
+        // Tabla de categorías
+        if (yPos < doc.internal.pageSize.getHeight() - 60) {
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Inventario por Categoría', 14, yPos);
+          yPos += 5;
+
+          const categoriaData = Object.entries(porCategoria).map(([cat, data]) => [
+            cat,
+            data.cantidad.toString(),
+            `Bs. ${data.valor.toFixed(2)}`
+          ]);
+
+          autoTable(doc, {
+            startY: yPos,
+            head: [['Categoría', 'Cantidad', 'Valor Total']],
+            body: categoriaData,
+            theme: 'grid',
+            headStyles: { fillColor: [52, 168, 83] },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      }
+
+      // Productos con stock bajo (nueva página si es necesario)
+      if (stockBajo > 0) {
+        doc.addPage();
+        yPos = 20;
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('⚠️ Productos con Stock Bajo', 14, yPos);
+        yPos += 7;
+
+        const productosBajoStock = productosArray
+          .filter(p => p.stock < 10)
+          .map(p => [
+            p.nombre,
+            getCategoriaNombre(p.categoriaId),
+            p.stock.toString(),
+            `Bs. ${p.precio.toFixed(2)}`
+          ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Producto', 'Categoría', 'Stock', 'Precio']],
+          body: productosBajoStock,
+          theme: 'grid',
+          headStyles: { fillColor: [255, 77, 79] },
+          margin: { left: 14, right: 14 },
+        });
+      }
+
+      // Pie de página
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(128);
+        doc.text(
+          `Página ${i} de ${totalPages}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+      }
+
+      // Guardar PDF
+      const fileName = `Inventario_Productos_${dayjs().format('DDMMYYYY_HHmm')}.pdf`;
+      doc.save(fileName);
+      
+      message.success('Inventario exportado exitosamente');
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      message.error('Error al generar el PDF');
+    }
+  };
+
   const productosArray = Array.isArray(productos) ? productos : [];
   const filteredProductos = productosArray.filter(p => 
     p.nombre.toLowerCase().includes(searchText.toLowerCase())
@@ -172,7 +366,13 @@ export const ProductosPage = () => {
           <Text type="secondary">Gestión de inventario y productos.</Text>
         </div>
         <Space>
-          <Button icon={<Download size={18} />}>Exportar</Button>
+          <Button 
+            icon={<Download size={18} />}
+            onClick={handleExportPDF}
+            loading={isLoading}
+          >
+            Exportar PDF
+          </Button>
           <Button type="primary" icon={<Plus size={18} />} onClick={() => handleOpenModal()}>Nuevo Producto</Button>
         </Space>
       </div>
