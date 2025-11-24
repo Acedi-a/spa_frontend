@@ -1,3 +1,15 @@
+export interface DetalleVentaReporte {
+  id: number;
+  tipoItem: 'Producto' | 'Servicio';
+  productoId: number | null;
+  nombreProducto: string | null;
+  servicioId: number | null;
+  nombreServicio: string | null;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
 export interface ReporteVentas {
   tipoReporte: string;
   periodo: string;
@@ -21,6 +33,7 @@ export interface ReporteVentas {
     metodoPago: string;
     estado: string | null;
     cantidadItems: number;
+    detalles: DetalleVentaReporte[];
   }[];
   ventasPorMetodoPago: Record<string, number>;
   ingresosPorMetodoPago: Record<string, number>;
