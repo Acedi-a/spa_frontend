@@ -104,6 +104,9 @@ export const VentasPage = () => {
 
   const handleOpenModal = () => {
     form.resetFields();
+    form.setFieldsValue({
+      fecha: dayjs(),
+    });
     clearCart();
     setIsModalOpen(true);
   };

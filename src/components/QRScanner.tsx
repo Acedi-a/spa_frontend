@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Button, Spin, Alert, Typography, Statistic, Card, Row, Col, Table, Tag, Descriptions } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, Button, Spin, Alert, Typography, Statistic, Card, Row, Col, Table, Tag, Descriptions, Select } from 'antd';
 import { QrCode, ShoppingCart, DollarSign, TrendingUp, Calendar } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { useMutation } from '@tanstack/react-query';
 import { getHistorialByQR } from '../api/historial';
 import type { HistorialCliente } from '../types/historialCliente';
@@ -12,89 +12,127 @@ const { Text } = Typography;
 export const QRScanner: React.FC = () => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [historialData, setHistorialData] = useState<HistorialCliente | null>(null);
-  const [scanner, setScanner] = useState<Html5QrcodeScanner | null>(null);
+  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   const historialMutation = useMutation({
     mutationFn: (qrCode: string) => getHistorialByQR(qrCode),
     onSuccess: (data) => {
       setHistorialData(data);
-      if (scanner) {
-        scanner.clear();
-      }
+      stopScanning();
     },
     onError: (error: any) => {
       Modal.error({
         title: 'Error al cargar historial',
         content: error.response?.data?.message || 'No se encontró información para este código QR',
       });
-      if (scanner) {
-        scanner.clear();
-      }
+      stopScanning();
       setScannerOpen(false);
     },
   });
 
+  // Obtener lista de cámaras disponibles
   useEffect(() => {
-    if (scannerOpen && !scanner) {
-      const html5QrcodeScanner = new Html5QrcodeScanner(
-        'qr-reader',
-        { 
-          fps: 10, 
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-        },
-        false
-      );
+    if (scannerOpen) {
+      Html5Qrcode.getCameras()
+        .then((devices) => {
+          if (devices && devices.length > 0) {
+            const cameraList = devices.map((device) => ({
+              id: device.id,
+              label: device.label || `Cámara ${device.id}`,
+            }));
+            setCameras(cameraList);
+            setSelectedCamera(cameraList[0].id);
+            setScannerError(null);
+          } else {
+            setScannerError('No se encontraron cámaras disponibles');
+          }
+        })
+        .catch((err) => {
+          console.error('Error al obtener cámaras:', err);
+          setScannerError('Error al acceder a las cámaras. Verifique los permisos.');
+        });
+    }
+  }, [scannerOpen]);
 
-      html5QrcodeScanner.render(
+  // Iniciar escaneo cuando se selecciona una cámara
+  useEffect(() => {
+    if (scannerOpen && selectedCamera && !isScanning) {
+      startScanning();
+    }
+    return () => {
+      stopScanning();
+    };
+  }, [selectedCamera]);
+
+  const startScanning = async () => {
+    if (!selectedCamera || isScanning) return;
+
+    try {
+      const html5QrCode = new Html5Qrcode('qr-reader');
+      scannerRef.current = html5QrCode;
+
+      await html5QrCode.start(
+        selectedCamera,
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
         (decodedText) => {
           // Validar que sea un UUID
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (uuidRegex.test(decodedText)) {
             historialMutation.mutate(decodedText);
           } else {
-            Modal.error({
+            Modal.warning({
               title: 'Código QR inválido',
               content: 'El código escaneado no es un código válido del sistema',
             });
           }
         },
-        (errorMessage) => {
-          // Ignorar errores de escaneo continuo
-          console.log(errorMessage);
-        }
+        undefined
       );
-
-      setScanner(html5QrcodeScanner);
+      setIsScanning(true);
+      setScannerError(null);
+    } catch (err: any) {
+      console.error('Error al iniciar scanner:', err);
+      setScannerError(err.message || 'Error al iniciar la cámara');
+      setIsScanning(false);
     }
+  };
 
-    return () => {
-      if (scanner) {
-        scanner.clear().catch(console.error);
+  const stopScanning = async () => {
+    if (scannerRef.current && isScanning) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+        scannerRef.current = null;
+        setIsScanning(false);
+      } catch (err) {
+        console.error('Error al detener scanner:', err);
       }
-    };
-  }, [scannerOpen]);
+    }
+  };
 
   const handleOpenScanner = () => {
     setScannerOpen(true);
     setHistorialData(null);
+    setScannerError(null);
   };
 
   const handleCloseScanner = () => {
-    if (scanner) {
-      scanner.clear().catch(console.error);
-      setScanner(null);
-    }
+    stopScanning();
     setScannerOpen(false);
+    setCameras([]);
+    setSelectedCamera('');
   };
 
   const handleCloseHistorial = () => {
     setHistorialData(null);
     setScannerOpen(false);
-    if (scanner) {
-      scanner.clear().catch(console.error);
-      setScanner(null);
-    }
   };
 
   const ventasColumns = [
@@ -202,16 +240,69 @@ export const QRScanner: React.FC = () => {
         ]}
         width={600}
       >
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <Alert
-            message="Posiciona el código QR frente a la cámara"
-            type="info"
-            showIcon
-            style={{ marginBottom: '20px' }}
-          />
-          <div id="qr-reader" style={{ width: '100%' }}></div>
+        <div style={{ padding: '20px' }}>
+          {scannerError ? (
+            <Alert
+              message="Error al acceder a la cámara"
+              description={scannerError}
+              type="error"
+              showIcon
+              style={{ marginBottom: '20px' }}
+            />
+          ) : (
+            <>
+              <Alert
+                message="Escanear Código QR del Cliente"
+                description="Posiciona el código QR del cliente frente a la cámara. El sistema detectará automáticamente el código."
+                type="info"
+                showIcon
+                style={{ marginBottom: '20px' }}
+              />
+              
+              {cameras.length > 1 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <Text strong style={{ marginRight: '10px' }}>Seleccionar Cámara:</Text>
+                  <Select
+                    value={selectedCamera}
+                    onChange={(value) => {
+                      stopScanning();
+                      setSelectedCamera(value);
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    {cameras.map((cam) => (
+                      <Select.Option key={cam.id} value={cam.id}>
+                        {cam.label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+            </>
+          )}
+
+          <div 
+            id="qr-reader" 
+            style={{ 
+              width: '100%', 
+              minHeight: isScanning ? '300px' : '100px',
+              border: isScanning ? '2px solid #1890ff' : '2px dashed #d9d9d9',
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}
+          ></div>
+
+          {!isScanning && !scannerError && cameras.length > 0 && (
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <Spin size="large" />
+              <Text style={{ display: 'block', marginTop: '10px' }} type="secondary">
+                Iniciando cámara...
+              </Text>
+            </div>
+          )}
+
           {historialMutation.isPending && (
-            <div style={{ marginTop: '20px' }}>
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
               <Spin size="large" />
               <Text style={{ display: 'block', marginTop: '10px' }}>
                 Cargando historial del cliente...
