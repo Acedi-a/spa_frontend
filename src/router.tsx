@@ -91,6 +91,20 @@ const calendarioRoute = createRoute({
   component: CalendarioPage,
 });
 
+// Ruta de Card Designer
+const cardDesignerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/card-designer',
+  component: CardDesignerPage,
+});
+
+// Ruta de Ajustes
+const ajustesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ajustes',
+  component: AjustesPage,
+});
+
 // Árbol de rutas
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -103,6 +117,8 @@ const routeTree = rootRoute.addChildren([
   ventasRoute,
   reportesRoute,
   calendarioRoute,
+  cardDesignerRoute,
+  ajustesRoute,
 ]);
 
 // Crear el router

@@ -101,8 +101,6 @@ export const Layout = () => {
             Sistema
           </div>
           <SidebarItem to="/ajustes" icon={SettingsIcon} label="Ajustes" />
-            Configuración
-          </div>
           <SidebarItem to="/card-designer" icon={CreditCard} label="Diseño de Tarjetas" />
         </nav>
 
