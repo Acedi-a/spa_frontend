@@ -12,7 +12,8 @@ import {
   Package,
   Scissors,
   ShoppingCart,
-  BarChart3
+  BarChart3,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 
 const SidebarItem = ({ 
@@ -93,6 +94,11 @@ export const Layout = () => {
             Análisis
           </div>
           <SidebarItem to="/reportes" icon={BarChart3} label="Reportes" />
+          
+          <div className="px-6 mt-8 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Sistema
+          </div>
+          <SidebarItem to="/ajustes" icon={SettingsIcon} label="Ajustes" />
         </nav>
 
         {/* User Profile / Footer */}

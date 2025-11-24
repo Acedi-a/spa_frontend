@@ -9,6 +9,7 @@ import { ServiciosPage } from './pages/ServiciosPage';
 import { VentasPage } from './pages/VentasPage';
 import { ReportesPage } from './pages/ReportesPage';
 import { CalendarioPage } from './pages/CalendarioPage';
+import { AjustesPage } from './pages/AjustesPage';
 
 // Root route que envuelve toda la aplicación con el Layout
 const rootRoute = createRootRoute({
@@ -89,6 +90,13 @@ const calendarioRoute = createRoute({
   component: CalendarioPage,
 });
 
+// Ruta de Ajustes
+const ajustesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ajustes',
+  component: AjustesPage,
+});
+
 // Árbol de rutas
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -101,6 +109,7 @@ const routeTree = rootRoute.addChildren([
   ventasRoute,
   reportesRoute,
   calendarioRoute,
+  ajustesRoute,
 ]);
 
 // Crear el router
