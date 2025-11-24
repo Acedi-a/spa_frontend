@@ -1,28 +1,34 @@
 export interface ReporteVentas {
-  totalVentas: number;
-  montoTotal: number;
-  ventasPorMetodoPago: {
-    metodoPago: string;
-    cantidad: number;
-    monto: number;
-  }[];
-  ventasPorDia?: {
+  tipoReporte: string;
+  periodo: string;
+  fechaInicio: string;
+  fechaFin: string;
+  clienteFiltro?: {
+    id: string;
+    nombre: string;
+  } | null;
+  totalIngresos: number;
+  totalTransacciones: number;
+  promedioVenta: number;
+  ventaMayor: number;
+  ventaMenor: number;
+  detalles: {
+    id: number;
+    clienteId: string;
+    nombreCliente: string;
     fecha: string;
-    cantidad: number;
-    monto: number;
+    total: number;
+    metodoPago: string;
+    estado: string | null;
+    cantidadItems: number;
   }[];
-  productosVendidos?: {
-    productoId: number;
-    nombre: string;
-    cantidad: number;
-    monto: number;
-  }[];
-  serviciosVendidos?: {
-    servicioId: number;
-    nombre: string;
-    cantidad: number;
-    monto: number;
-  }[];
+  ventasPorMetodoPago: Record<string, number>;
+  ingresosPorMetodoPago: Record<string, number>;
+  ventasPorDia: Record<string, {
+    fecha: string;
+    cantidadVentas: number;
+    totalIngresos: number;
+  }>;
 }
 
 export interface FiltrosReporte {
