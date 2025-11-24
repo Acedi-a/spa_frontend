@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getVentas, createVenta, getVentasByCliente } from '../api/ventas';
+import { getVentas, createVenta } from '../api/ventas';
 import { getClientes, getClienteById } from '../api/clientes';
-import { getProductos, getProductoById } from '../api/productos';
-import { getServicios, getServicioById } from '../api/servicios';
+import { getProductos, descontarStockProducto } from '../api/productos';
+import { getServicios } from '../api/servicios';
 import type { Venta } from '../types/venta';
-import type { Cliente } from '../types/cliente';
 import type { Producto } from '../types/producto';
 import type { Servicio } from '../types/servicio';
 import { Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, Select, InputNumber, DatePicker, Tag, message, Descriptions, Spin, Row, Col, Divider, List, Tabs } from 'antd';
@@ -22,6 +21,7 @@ interface CartItem {
   precio: number;
   cantidad: number;
   subtotal: number;
+  datosCompletos?: Producto | Servicio; // Datos completos para actualización de stock
 }
 
 export const VentasPage = () => {
@@ -64,6 +64,7 @@ export const VentasPage = () => {
         precio: item.precio,
         cantidad: 1,
         subtotal: item.precio,
+        datosCompletos: item, // Guardar datos completos para actualizar stock
       }]);
     }
   };
@@ -93,10 +94,32 @@ export const VentasPage = () => {
   };
 
   const createMutation = useMutation({
-    mutationFn: createVenta,
+    mutationFn: async (ventaData: any) => {
+      // Primero crear la venta
+      const venta = await createVenta(ventaData);
+      
+      // Luego descontar el stock de cada producto en el carrito
+      const productosEnCarrito = cart.filter(item => item.type === 'producto');
+      
+      for (const producto of productosEnCarrito) {
+        try {
+          // Usar los datos completos guardados en el carrito
+          if (producto.datosCompletos) {
+            await descontarStockProducto(producto.datosCompletos as Producto, producto.cantidad);
+          }
+        } catch (error) {
+          console.error(`Error al descontar stock del producto ${producto.id}:`, error);
+          // Continuamos con los demás productos
+          message.warning(`No se pudo descontar el stock del producto: ${producto.nombre}`);
+        }
+      }
+      
+      return venta;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ventas'] });
-      message.success('Venta registrada');
+      queryClient.invalidateQueries({ queryKey: ['productos'] });
+      message.success('Venta registrada y stock actualizado');
       handleCloseModal();
     },
     onError: () => message.error('Error al registrar venta'),

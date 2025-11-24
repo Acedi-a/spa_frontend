@@ -29,3 +29,32 @@ export const updateProducto = async (producto: UpdateProductoDto): Promise<Produ
 export const deleteProducto = async (id: number): Promise<void> => {
   await api.delete(`Productos/${id}`);
 };
+
+/**
+ * Descontar stock de un producto (usado al registrar una venta)
+ * @param producto Producto con todos sus datos
+ * @param cantidad Cantidad a descontar
+ * @returns El producto actualizado
+ */
+export const descontarStockProducto = async (producto: Producto, cantidad: number): Promise<Producto> => {
+  try {
+    // Calcular nuevo stock
+    const nuevoStock = Math.max(0, producto.stock - cantidad);
+    
+    // Actualizar producto con nuevo stock
+    const productoActualizado = await updateProducto({
+      id: producto.id,
+      nombre: producto.nombre,
+      categoriaId: producto.categoriaId,
+      precio: producto.precio,
+      stock: nuevoStock,
+      stockMinimo: producto.stockMinimo,
+      fechaVencimiento: producto.fechaVencimiento,
+    });
+    
+    return productoActualizado;
+  } catch (error) {
+    console.error(`Error al descontar stock del producto ${producto.id}:`, error);
+    throw error;
+  }
+};
