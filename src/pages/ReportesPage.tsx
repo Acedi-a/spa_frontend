@@ -5,9 +5,11 @@ import { getClientes } from '../api/clientes';
 import { getCategorias } from '../api/categorias';
 import { getProductos } from '../api/productos';
 import { getServicios } from '../api/servicios';
-import { Typography, Card, DatePicker, Select, Button, Space, Statistic, Row, Col, Table, Alert, Tag, Tabs, Divider } from 'antd';
+import { Typography, Card, DatePicker, Select, Button, Space, Statistic, Row, Col, Table, Alert, Tag, Tabs, Divider, message } from 'antd';
 import { Download, TrendingUp, ShoppingCart, DollarSign, ArrowUp, ArrowDown, Package, Scissors, BarChart3, PieChart as PieChartIcon } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -127,6 +129,235 @@ export const ReportesPage = () => {
     }
   };
 
+  const handleExportPDF = () => {
+    if (!reporte || !chartData) {
+      message.error('No hay datos para exportar');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let yPos = 20;
+
+      // Encabezado
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('REPORTE DE VENTAS', pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 10;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Período: ${dayjs(fechaInicio).format('DD/MM/YYYY')} - ${dayjs(fechaFin).format('DD/MM/YYYY')}`, pageWidth / 2, yPos, { align: 'center' });
+      
+      if (clienteId) {
+        const cliente = Array.isArray(clientes) ? clientes.find(c => c.id === clienteId) : null;
+        yPos += 5;
+        doc.text(`Cliente: ${cliente?.nombre || 'N/A'}`, pageWidth / 2, yPos, { align: 'center' });
+      }
+
+      yPos += 15;
+
+      // Estadísticas principales
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Resumen General', 14, yPos);
+      yPos += 7;
+
+      const estadisticas = [
+        ['Total Transacciones', reporte.totalTransacciones.toString()],
+        ['Ingresos Totales', `Bs. ${reporte.totalIngresos.toFixed(2)}`],
+        ['Promedio por Venta', `Bs. ${reporte.promedioVenta.toFixed(2)}`],
+        ['Venta Mayor', `Bs. ${reporte.ventaMayor.toFixed(2)}`],
+        ['Venta Menor', `Bs. ${reporte.ventaMenor.toFixed(2)}`],
+      ];
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Métrica', 'Valor']],
+        body: estadisticas,
+        theme: 'grid',
+        headStyles: { fillColor: [24, 144, 255] },
+        margin: { left: 14, right: 14 },
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+
+      // Ventas por método de pago
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ventas por Método de Pago', 14, yPos);
+      yPos += 7;
+
+      const metodosPagoBody = chartData.metodosPagoData.map(m => [
+        m.metodo,
+        m.cantidad.toString(),
+        `Bs. ${m.monto.toFixed(2)}`
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Método de Pago', 'Cantidad', 'Monto Total']],
+        body: metodosPagoBody,
+        theme: 'grid',
+        headStyles: { fillColor: [24, 144, 255] },
+        margin: { left: 14, right: 14 },
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+
+      // Productos vs Servicios
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Distribución: Productos vs Servicios', 14, yPos);
+      yPos += 7;
+
+      const distribBody = chartData.productoVsServicio.map(item => [
+        item.name,
+        item.cantidad.toString(),
+        `Bs. ${item.value.toFixed(2)}`,
+        `${((item.value / reporte.totalIngresos) * 100).toFixed(1)}%`
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Tipo', 'Cantidad Items', 'Ingresos', '% del Total']],
+        body: distribBody,
+        theme: 'grid',
+        headStyles: { fillColor: [24, 144, 255] },
+        margin: { left: 14, right: 14 },
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+
+      // Top 10 Productos
+      if (chartData.topProductos.length > 0) {
+        if (yPos > 230) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Top 10 Productos Más Vendidos', 14, yPos);
+        yPos += 7;
+
+        const productosBody = chartData.topProductos.slice(0, 10).map((p, idx) => [
+          (idx + 1).toString(),
+          p.nombre,
+          p.cantidad.toString(),
+          `Bs. ${p.ingresos.toFixed(2)}`
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['#', 'Producto', 'Cantidad', 'Ingresos']],
+          body: productosBody,
+          theme: 'grid',
+          headStyles: { fillColor: [0, 196, 159] },
+          margin: { left: 14, right: 14 },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+      }
+
+      // Top 10 Servicios
+      if (chartData.topServicios.length > 0) {
+        if (yPos > 230) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Top 10 Servicios Más Solicitados', 14, yPos);
+        yPos += 7;
+
+        const serviciosBody = chartData.topServicios.slice(0, 10).map((s, idx) => [
+          (idx + 1).toString(),
+          s.nombre,
+          s.cantidad.toString(),
+          `Bs. ${s.ingresos.toFixed(2)}`
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['#', 'Servicio', 'Cantidad', 'Ingresos']],
+          body: serviciosBody,
+          theme: 'grid',
+          headStyles: { fillColor: [255, 128, 66] },
+          margin: { left: 14, right: 14 },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+      }
+
+      // Detalle de ventas
+      if (reporte.detalles.length > 0) {
+        doc.addPage();
+        yPos = 20;
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Detalle de Ventas', 14, yPos);
+        yPos += 7;
+
+        const ventasBody = reporte.detalles.map(v => [
+          v.id.toString(),
+          v.nombreCliente,
+          dayjs(v.fecha).format('DD/MM/YYYY'),
+          v.metodoPago,
+          v.cantidadItems.toString(),
+          `Bs. ${v.total.toFixed(2)}`
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['ID', 'Cliente', 'Fecha', 'Método', 'Items', 'Total']],
+          body: ventasBody,
+          theme: 'striped',
+          headStyles: { fillColor: [24, 144, 255] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 8 },
+        });
+      }
+
+      // Pie de página
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(128);
+        doc.text(
+          `Página ${i} de ${totalPages}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+        doc.text(
+          `Generado el ${dayjs().format('DD/MM/YYYY HH:mm')}`,
+          pageWidth - 14,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'right' }
+        );
+      }
+
+      // Guardar PDF
+      const fileName = `Reporte_Ventas_${dayjs(fechaInicio).format('DDMMYYYY')}_${dayjs(fechaFin).format('DDMMYYYY')}.pdf`;
+      doc.save(fileName);
+      
+      message.success('Reporte exportado exitosamente');
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      message.error('Error al generar el PDF');
+    }
+  };
+
   if (isError) return <Alert message="Error al cargar reportes" type="error" showIcon />;
 
   return (
@@ -155,7 +386,14 @@ export const ReportesPage = () => {
           >
             {Array.isArray(clientes) && clientes.map(c => <Select.Option key={c.id} value={c.id}>{c.nombre}</Select.Option>)}
           </Select>
-          <Button icon={<Download size={18} />}>Exportar PDF</Button>
+          <Button 
+            icon={<Download size={18} />} 
+            onClick={handleExportPDF}
+            loading={isLoading}
+            type="primary"
+          >
+            Exportar PDF
+          </Button>
         </Space>
       </Card>
 
