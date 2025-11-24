@@ -22,6 +22,18 @@ export const ServiciosPage = () => {
   const { data: categorias } = useQuery({ queryKey: ['categorias'], queryFn: getCategorias });
   const { data: empleadas } = useQuery({ queryKey: ['empleadas'], queryFn: getEmpleadas });
 
+  // Helper para obtener nombre de categoría
+  const getCategoriaNombre = (categoriaId: number) => {
+    const categoria = categorias?.find(c => c.id === categoriaId);
+    return categoria?.nombre || 'N/A';
+  };
+
+  // Helper para obtener nombre de empleada
+  const getEmpleadaNombre = (empleadaId: number) => {
+    const empleada = empleadas?.find(e => e.id === empleadaId);
+    return empleada?.nombre || 'N/A';
+  };
+
   const createMutation = useMutation({
     mutationFn: createServicio,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['servicios'] }); message.success('Servicio creado'); handleCloseModal(); },
@@ -70,10 +82,10 @@ export const ServiciosPage = () => {
 
   const columns: ColumnsType<Servicio> = [
     { title: 'Servicio', dataIndex: 'nombre', key: 'nombre', render: (text) => (<div className="flex items-center gap-2"><Scissors size={18} className="text-purple-500" /><Text strong>{text}</Text></div>) },
-    { title: 'Categoría', key: 'categoria', render: (_, record) => <Tag color="blue">{record.categoria?.nombre || 'N/A'}</Tag> },
+    { title: 'Categoría', key: 'categoria', render: (_, record) => <Tag color="blue">{getCategoriaNombre(record.categoriaId)}</Tag> },
     { title: 'Precio', dataIndex: 'precio', key: 'precio', render: (precio) => `Bs. ${precio.toFixed(2)}`, sorter: (a, b) => a.precio - b.precio },
     { title: 'Duración', dataIndex: 'duracion', key: 'duracion', render: (d) => `${d} min` },
-    { title: 'Empleada', key: 'empleada', render: (_, record) => record.empleada?.nombre || 'N/A' },
+    { title: 'Empleada', key: 'empleada', render: (_, record) => getEmpleadaNombre(record.empleadaId) },
     {
       title: 'Acciones', key: 'acciones', render: (_, record) => {
         const items: MenuProps['items'] = [

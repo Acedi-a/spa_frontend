@@ -23,6 +23,12 @@ export const ProductosPage = () => {
   const { data: productos, isLoading, isError } = useQuery({ queryKey: ['productos'], queryFn: getProductos });
   const { data: categorias } = useQuery({ queryKey: ['categorias'], queryFn: getCategorias });
 
+  // Helper para obtener nombre de categoría
+  const getCategoriaNombre = (categoriaId: number) => {
+    const categoria = categorias?.find(c => c.id === categoriaId);
+    return categoria?.nombre || 'N/A';
+  };
+
   const createMutation = useMutation({
     mutationFn: createProducto,
     onSuccess: () => {
@@ -108,7 +114,7 @@ export const ProductosPage = () => {
     {
       title: 'Categoría',
       key: 'categoria',
-      render: (_, record) => <Tag color="blue">{record.categoria?.nombre || 'N/A'}</Tag>,
+      render: (_, record) => <Tag color="blue">{getCategoriaNombre(record.categoriaId)}</Tag>,
     },
     {
       title: 'Precio',

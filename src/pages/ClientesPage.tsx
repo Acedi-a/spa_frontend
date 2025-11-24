@@ -30,9 +30,11 @@ import {
   Filter,
   Download,
   Edit,
-  Trash2
+  Trash2,
+  QrCode
 } from 'lucide-react';
 import dayjs from 'dayjs';
+import { QRCardModal } from '../components/QRCardModal';
 
 const { Title, Text } = Typography;
 
@@ -40,6 +42,8 @@ export const ClientesPage = () => {
   const [searchText, setSearchText] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [qrCardOpen, setQrCardOpen] = useState(false);
+  const [selectedClienteForQR, setSelectedClienteForQR] = useState<Cliente | null>(null);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   
@@ -208,6 +212,15 @@ export const ClientesPage = () => {
       render: (_, record) => {
         const menuItems: MenuProps['items'] = [
           {
+            key: 'qr',
+            label: 'Generar Tarjeta QR',
+            icon: <QrCode size={16} />,
+            onClick: () => {
+              setSelectedClienteForQR(record);
+              setQrCardOpen(true);
+            },
+          },
+          {
             key: 'edit',
             label: 'Editar',
             icon: <Edit size={16} />,
@@ -355,6 +368,18 @@ export const ClientesPage = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Modal de Tarjeta QR */}
+      {selectedClienteForQR && (
+        <QRCardModal
+          open={qrCardOpen}
+          onClose={() => {
+            setQrCardOpen(false);
+            setSelectedClienteForQR(null);
+          }}
+          cliente={selectedClienteForQR}
+        />
+      )}
     </div>
   );
 };

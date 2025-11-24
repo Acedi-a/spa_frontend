@@ -14,7 +14,9 @@ import {
   ShoppingCart,
   BarChart3,
   Settings as SettingsIcon,
+  CreditCard
 } from 'lucide-react';
+import { QRScanner } from './QRScanner';
 
 const SidebarItem = ({ 
   to, 
@@ -99,6 +101,9 @@ export const Layout = () => {
             Sistema
           </div>
           <SidebarItem to="/ajustes" icon={SettingsIcon} label="Ajustes" />
+            Configuración
+          </div>
+          <SidebarItem to="/card-designer" icon={CreditCard} label="Diseño de Tarjetas" />
         </nav>
 
         {/* User Profile / Footer */}
@@ -146,6 +151,9 @@ export const Layout = () => {
           </div>
         </div>
       </main>
+
+      {/* QR Scanner siempre disponible */}
+      <QRScanner />
     </div>
   );
 };
