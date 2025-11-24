@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getReporteVentas } from '../api/reportes';
 import { getClientes } from '../api/clientes';
-import { Typography, Card, DatePicker, Select, Button, Space, Statistic, Row, Col, Table, Alert } from 'antd';
+import { Typography, Card, DatePicker, Select, Button, Space, Statistic, Row, Col, Table, Alert, Tag } from 'antd';
 import { Download, TrendingUp, ShoppingCart, DollarSign } from 'lucide-react';
 import dayjs from 'dayjs';
 
@@ -10,13 +10,15 @@ const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 export const ReportesPage = () => {
-  const [fechaInicio, setFechaInicio] = useState<string | undefined>();
-  const [fechaFin, setFechaFin] = useState<string | undefined>();
+  // Inicializar con rango del último mes
+  const [fechaInicio, setFechaInicio] = useState<string>(dayjs().subtract(1, 'month').format('YYYY-MM-DD'));
+  const [fechaFin, setFechaFin] = useState<string>(dayjs().format('YYYY-MM-DD'));
   const [clienteId, setClienteId] = useState<string | undefined>();
 
   const { data: reporte, isLoading, isError } = useQuery({
     queryKey: ['reporte-ventas', fechaInicio, fechaFin, clienteId],
     queryFn: () => getReporteVentas({ fechaInicio, fechaFin, clienteId }),
+    enabled: !!fechaInicio && !!fechaFin,
   });
 
   const { data: clientes } = useQuery({ queryKey: ['clientes'], queryFn: getClientes });
@@ -26,8 +28,9 @@ export const ReportesPage = () => {
       setFechaInicio(dates[0].format('YYYY-MM-DD'));
       setFechaFin(dates[1].format('YYYY-MM-DD'));
     } else {
-      setFechaInicio(undefined);
-      setFechaFin(undefined);
+      // Reset a último mes
+      setFechaInicio(dayjs().subtract(1, 'month').format('YYYY-MM-DD'));
+      setFechaFin(dayjs().format('YYYY-MM-DD'));
     }
   };
 
@@ -42,7 +45,12 @@ export const ReportesPage = () => {
 
       <Card bordered={false} className="shadow-sm rounded-2xl">
         <Space wrap size="large">
-          <RangePicker format="DD/MM/YYYY" placeholder={['Fecha inicio', 'Fecha fin']} onChange={handleDateChange} />
+          <RangePicker 
+            format="DD/MM/YYYY" 
+            placeholder={['Fecha inicio', 'Fecha fin']} 
+            onChange={handleDateChange}
+            defaultValue={[dayjs().subtract(1, 'month'), dayjs()]}
+          />
           <Select
             placeholder="Filtrar por cliente"
             className="w-64"
@@ -58,52 +66,87 @@ export const ReportesPage = () => {
       </Card>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="shadow-sm">
             <Statistic
-              title="Total Ventas"
-              value={reporte?.totalVentas || 0}
+              title="Total Transacciones"
+              value={reporte?.totalTransacciones || 0}
               prefix={<ShoppingCart size={20} />}
               valueStyle={{ color: '#3f8600' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="shadow-sm">
             <Statistic
-              title="Monto Total"
-              value={reporte?.montoTotal ? reporte.montoTotal.toFixed(2) : '0.00'}
+              title="Ingresos Totales"
+              value={reporte?.totalIngresos ? reporte.totalIngresos.toFixed(2) : '0.00'}
               prefix="Bs."
               suffix={<DollarSign size={20} />}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="shadow-sm">
             <Statistic
               title="Promedio por Venta"
-              value={reporte && reporte.montoTotal && reporte.totalVentas ? (reporte.montoTotal / reporte.totalVentas).toFixed(2) : '0.00'}
+              value={reporte?.promedioVenta ? reporte.promedioVenta.toFixed(2) : '0.00'}
               prefix="Bs."
               suffix={<TrendingUp size={20} />}
             />
           </Card>
         </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="Venta Mayor"
+              value={reporte?.ventaMayor ? reporte.ventaMayor.toFixed(2) : '0.00'}
+              prefix="Bs."
+              valueStyle={{ color: '#cf1322' }}
+            />
+          </Card>
+        </Col>
       </Row>
 
-      <Card bordered={false} className="shadow-md rounded-2xl" title="Ventas por Método de Pago">
-        <Table
-          dataSource={Array.isArray(reporte?.ventasPorMetodoPago) ? reporte.ventasPorMetodoPago : []}
-          columns={[
-            { title: 'Método de Pago', dataIndex: 'metodoPago', key: 'metodoPago' },
-            { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad' },
-            { title: 'Monto Total', dataIndex: 'monto', key: 'monto', render: (monto) => monto ? `Bs. ${monto.toFixed(2)}` : 'Bs. 0.00' },
-          ]}
-          rowKey="metodoPago"
-          pagination={false}
-          loading={isLoading}
-        />
-      </Card>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card bordered={false} className="shadow-md rounded-2xl" title="Ventas por Método de Pago">
+            <Table
+              dataSource={reporte?.ventasPorMetodoPago ? Object.entries(reporte.ventasPorMetodoPago).map(([metodo, cantidad]) => ({
+                metodoPago: metodo,
+                cantidad,
+                monto: reporte.ingresosPorMetodoPago[metodo] || 0
+              })) : []}
+              columns={[
+                { title: 'Método de Pago', dataIndex: 'metodoPago', key: 'metodoPago' },
+                { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad' },
+                { title: 'Monto Total', dataIndex: 'monto', key: 'monto', render: (monto) => `Bs. ${monto.toFixed(2)}` },
+              ]}
+              rowKey="metodoPago"
+              pagination={false}
+              loading={isLoading}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card bordered={false} className="shadow-md rounded-2xl" title="Detalle de Ventas">
+            <Table
+              dataSource={reporte?.detalles || []}
+              columns={[
+                { title: 'Cliente', dataIndex: 'nombreCliente', key: 'nombreCliente' },
+                { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', render: (fecha) => dayjs(fecha).format('DD/MM/YYYY') },
+                { title: 'Total', dataIndex: 'total', key: 'total', render: (total) => `Bs. ${total.toFixed(2)}` },
+                { title: 'Método', dataIndex: 'metodoPago', key: 'metodoPago', render: (m) => <Tag color="blue">{m}</Tag> },
+              ]}
+              rowKey="id"
+              pagination={{ pageSize: 5 }}
+              loading={isLoading}
+              size="small"
+            />
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };
