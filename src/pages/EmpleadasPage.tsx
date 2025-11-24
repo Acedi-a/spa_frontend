@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getEmpleadas, createEmpleada, updateEmpleada, deleteEmpleada } from '../api/empleadas';
+import { getPromedioEmpleada } from '../api/valoraciones';
 import type { Empleada } from '../types/empleada';
+import { ValoracionesModal } from '../components/ValoracionesModal';
+import { ComisionesDrawer } from '../components/ComisionesDrawer';
 import { 
-  Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, DatePicker, InputNumber, Dropdown, Tag, message
+  Table, Button, Input, Space, Typography, Card, Alert, Modal, Form, DatePicker, InputNumber, Dropdown, Tag, message, Rate, Spin
 } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Search, Plus, MoreVertical, Edit, Trash2, UserCheck, Mail, Download } from 'lucide-react';
+import { Search, Plus, MoreVertical, Edit, Trash2, UserCheck, Mail, Download, Star, TrendingUp } from 'lucide-react';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -16,6 +19,10 @@ export const EmpleadasPage = () => {
   const [searchText, setSearchText] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmpleada, setEditingEmpleada] = useState<Empleada | null>(null);
+  const [selectedEmpleadaForValoraciones, setSelectedEmpleadaForValoraciones] = useState<Empleada | null>(null);
+  const [valoracionesOpen, setValoracionesOpen] = useState(false);
+  const [selectedEmpleadaForComisiones, setSelectedEmpleadaForComisiones] = useState<Empleada | null>(null);
+  const [comisionesOpen, setComisionesOpen] = useState(false);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   
@@ -73,7 +80,13 @@ export const EmpleadasPage = () => {
     form.resetFields();
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    nombre: string;
+    email: string;
+    fechaContratacion: dayjs.Dayjs;
+    porcentajeComision: number;
+    especialidad?: string;
+  }) => {
     const data = {
       ...values,
       fechaContratacion: values.fechaContratacion.format('YYYY-MM-DD'),
@@ -95,6 +108,16 @@ export const EmpleadasPage = () => {
       cancelText: 'Cancelar',
       onOk: () => deleteMutation.mutate(id),
     });
+  };
+
+  const handleViewValoraciones = (empleada: Empleada) => {
+    setSelectedEmpleadaForValoraciones(empleada);
+    setValoracionesOpen(true);
+  };
+
+  const handleViewComisiones = (empleada: Empleada) => {
+    setSelectedEmpleadaForComisiones(empleada);
+    setComisionesOpen(true);
   };
 
   const empleadasArray = Array.isArray(empleadas) ? empleadas : [];
@@ -147,10 +170,30 @@ export const EmpleadasPage = () => {
       sorter: (a, b) => dayjs(a.fechaContratacion).unix() - dayjs(b.fechaContratacion).unix(),
     },
     {
+      title: 'Calificación',
+      key: 'calificacion',
+      width: 120,
+      render: (_, record) => (
+        <RatingCell empleadaId={record.id} onViewClick={() => handleViewValoraciones(record)} />
+      ),
+    },
+    {
       title: 'Acciones',
       key: 'acciones',
       render: (_, record) => {
         const items: MenuProps['items'] = [
+          { 
+            key: 'valoraciones', 
+            label: 'Ver Valoraciones', 
+            icon: <Star size={16} />, 
+            onClick: () => handleViewValoraciones(record) 
+          },
+          { 
+            key: 'comisiones', 
+            label: 'Ver Comisiones', 
+            icon: <TrendingUp size={16} />, 
+            onClick: () => handleViewComisiones(record) 
+          },
           { key: 'edit', label: 'Editar', icon: <Edit size={16} />, onClick: () => handleOpenModal(record) },
           { key: 'delete', label: 'Eliminar', icon: <Trash2 size={16} />, danger: true, onClick: () => handleDelete(record.id) },
         ];
@@ -223,6 +266,66 @@ export const EmpleadasPage = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      {selectedEmpleadaForValoraciones && (
+        <ValoracionesModal
+          empleada={selectedEmpleadaForValoraciones}
+          visible={valoracionesOpen}
+          onClose={() => {
+            setValoracionesOpen(false);
+            setSelectedEmpleadaForValoraciones(null);
+          }}
+        />
+      )}
+
+      {selectedEmpleadaForComisiones && (
+        <ComisionesDrawer
+          empleada={selectedEmpleadaForComisiones}
+          visible={comisionesOpen}
+          onClose={() => {
+            setComisionesOpen(false);
+            setSelectedEmpleadaForComisiones(null);
+          }}
+        />
+      )}
     </div>
+  );
+};
+
+// Componente auxiliar para mostrar la calificación
+const RatingCell = ({ empleadaId, onViewClick }: { empleadaId: number; onViewClick: () => void }) => {
+  const { data: promedio, isLoading } = useQuery({
+    queryKey: ['promedio', empleadaId],
+    queryFn: () => getPromedioEmpleada(empleadaId),
+  });
+
+  if (isLoading) return <Spin size="small" />;
+
+  if (!promedio || promedio.promedioCalificacion === 0) {
+    return (
+      <Button
+        type="text"
+        size="small"
+        onClick={onViewClick}
+        icon={<Star size={16} />}
+        className="text-slate-400"
+      >
+        Sin calificaciones
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      type="text"
+      size="small"
+      onClick={onViewClick}
+      className="hover:bg-amber-50"
+    >
+      <div className="flex items-center gap-1">
+        <Rate value={Math.round(promedio.promedioCalificacion)} disabled style={{ fontSize: 14, color: '#faad14' }} />
+        <span className="text-xs text-slate-600">({promedio.promedioCalificacion.toFixed(1)})</span>
+      </div>
+    </Button>
   );
 };

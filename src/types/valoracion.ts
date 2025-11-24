@@ -6,7 +6,10 @@ export interface Valoracion {
   ventaId: number;
   calificacion: number; // 1-5
   comentario: string | null;
-  fecha?: string;
+  fecha: string;
+  nombreCliente: string;
+  nombreServicio: string;
+  nombreEmpleada: string | null;
 }
 
 export interface CreateValoracionDto {
@@ -20,6 +23,23 @@ export interface CreateValoracionDto {
 
 export interface PromedioValoracion {
   empleadaId: number;
-  promedio: number;
+  promedioCalificacion: number;
+  mensaje?: string;
+}
+
+export interface ReporteEmpleada {
+  empleadaId: number;
+  nombreEmpleada: string;
+  especialidad: string;
+  promedioCalificacion: number;
   totalValoraciones: number;
+  distribucionCalificaciones: Record<string, number>;
+  valoraciones: Valoracion[];
+  fechaGeneracion: string;
+  fechaInicio: string | null;
+  fechaFin: string | null;
+  calificacionesAltasCount: number;
+  calificacionesMediasCount: number;
+  calificacionesBajasCount: number;
+  observacionesGenerales: string;
 }
